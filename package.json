@@ -1,0 +1,14 @@
+{
+  "name": "contador-regalos-tiktok",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Escucha regalos de TikTok Live y actualiza contadores en Firebase para el overlay",
+  "scripts": {
+    "start": "node contador-regalos.js"
+  },
+  "dependencies": {
+    "tiktok-live-connector": "^1.4.0",
+    "firebase": "^10.12.2",
+    "express": "^4.19.2"
+  }
+}
