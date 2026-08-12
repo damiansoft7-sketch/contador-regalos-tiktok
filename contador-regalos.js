@@ -9,7 +9,7 @@
 // ya escucha esa ruta con onValue(), el número cambia solo, en vivo.
 // ============================================================
 
-import { WebcastPushConnection } from "tiktok-live-connector";
+import { TikTokLiveConnection, WebcastEvent } from "tiktok-live-connector";
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, set, get } from "firebase/database";
 import express from "express";
@@ -38,26 +38,16 @@ const firebaseConfig = {
 // Cada entrada = un regalo que quieres contar y a qué caja de texto
 // (id de tu overlay) debe actualizar el número.
 //
-// Cómo obtener el "id":
-//   1. En index.html, click en "🔤 AGREGAR TEXTO" para crear la caja.
-//   2. Inspecciona el elemento (clic derecho > Inspeccionar) y copia
-//      el id del div con clase "box" (ej: "texto_1723400000000").
-//
-// Puedes agregar tantas líneas como regalos distintos quieras contar.
 // El nombre del regalo (giftName) debe coincidir EXACTO con el que
-// manda TikTok (revisa el log de la consola al recibir uno real,
-// por si aparece en otro idioma).
+// manda TikTok (revisa el log de la consola / de Render al recibir
+// uno real, por si aparece distinto).
 const CONTADORES = {
   "Collar de Amistad": { id: "texto_1786492863677", cantidad: 0 },
   "Rosa":              { id: "texto_1786492875052", cantidad: 0 },
-  // Si al probar ves en la consola que el nombre real es distinto
-  // (ej. "Rose" o "Friendship Necklace"), cambia la clave aquí abajo
-  // por el nombre exacto que te muestre el log.
 };
 
 // Si quieres un contador que sume TODOS los regalos sin importar
-// cuál sea, deja aquí el id de esa caja, o déjalo en null para
-// desactivar esta opción.
+// cuál sea, pon activo:true y el id de esa caja.
 const CONTADOR_TOTAL = {
   activo: false,
   id: "texto_CAMBIAR_ESTE_ID_TOTAL",
@@ -68,8 +58,8 @@ const CONTADOR_TOTAL = {
 // A partir de aquí no necesitas tocar nada
 // ============================================================
 
-const app = initializeApp(firebaseConfig);
-const database = getDatabase(app);
+const firebaseApp = initializeApp(firebaseConfig);
+const database = getDatabase(firebaseApp);
 
 async function actualizarContador(id, cantidad) {
   try {
@@ -80,7 +70,7 @@ async function actualizarContador(id, cantidad) {
   }
 }
 
-// Restaura los contadores guardados (por si cierras y reabres el script
+// Restaura los contadores guardados (por si el servicio se reinicia
 // y no quieres que vuelva a empezar desde 0)
 async function restaurarContadores() {
   for (const giftName in CONTADORES) {
@@ -103,7 +93,11 @@ async function restaurarContadores() {
 async function iniciar() {
   await restaurarContadores();
 
-  const connection = new WebcastPushConnection(TIKTOK_USERNAME);
+  // enableExtendedGiftInfo permite que data.giftDetails.giftName
+  // venga con el nombre real del regalo (ej. "Rosa", "Collar de Amistad")
+  const connection = new TikTokLiveConnection(TIKTOK_USERNAME, {
+    enableExtendedGiftInfo: true
+  });
 
   connection.connect()
     .then(state => {
@@ -111,19 +105,22 @@ async function iniciar() {
     })
     .catch(err => {
       console.error("❌ No se pudo conectar. ¿Estás en vivo ahora mismo?", err);
-      process.exit(1);
     });
 
-  connection.on("gift", data => {
+  connection.on(WebcastEvent.GIFT, data => {
+    const giftType = data.giftDetails?.giftType ?? data.giftType;
+    const giftName = data.giftDetails?.giftName ?? data.giftName;
+    const uniqueId = data.user?.uniqueId ?? data.uniqueId ?? "alguien";
+
     // TikTok reenvía el mismo regalo varias veces mientras el usuario
     // mantiene presionado el botón (combo). Solo contamos cuando el
     // combo termina, para no duplicar de más.
-    if (data.giftType === 1 && !data.repeatEnd) return;
+    if (giftType === 1 && !data.repeatEnd) return;
 
     const cantidadRecibida = data.repeatCount || 1;
-    console.log(`🎁 ${data.uniqueId} envió ${cantidadRecibida}x "${data.giftName}"`);
+    console.log(`🎁 ${uniqueId} envió ${cantidadRecibida}x "${giftName}"`);
 
-    const cfg = CONTADORES[data.giftName];
+    const cfg = CONTADORES[giftName];
     if (cfg) {
       cfg.cantidad += cantidadRecibida;
       actualizarContador(cfg.id, cfg.cantidad);
@@ -135,7 +132,7 @@ async function iniciar() {
     }
   });
 
-  connection.on("disconnected", () => {
+  connection.on(WebcastEvent.DISCONNECTED, () => {
     console.log("⚠️ Desconectado del live. Reintentando en 10s...");
     setTimeout(() => connection.connect().catch(() => {}), 10000);
   });
@@ -147,16 +144,16 @@ iniciar();
 // SERVIDOR WEB MÍNIMO — necesario solo para poder desplegar esto
 // gratis en Render (que exige un "Web Service" que responda HTTP).
 // No hace nada más que confirmar que el proceso sigue vivo.
-// Un servicio gratuito como UptimeRobot debe visitar esta URL
+// Un monitor gratuito como UptimeRobot debe visitar esta URL
 // cada 5-10 minutos para evitar que Render lo duerma.
 // ------------------------------------------------------------
-const app = express();
+const server = express();
 const PORT = process.env.PORT || 3000;
 
-app.get("/health", (req, res) => {
+server.get("/health", (req, res) => {
   res.status(200).send("Contador de regalos activo ✅");
 });
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Servidor de salud escuchando en el puerto ${PORT}`);
 });
