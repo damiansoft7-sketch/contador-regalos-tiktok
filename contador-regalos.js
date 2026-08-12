@@ -7,6 +7,9 @@
 //
 // No necesitas tocar index.html ni overlay.html: como overlay.html
 // ya escucha esa ruta con onValue(), el número cambia solo, en vivo.
+//
+// Para probar o resetear manualmente, usa los botones 🧪 TEST y
+// ♻ RESET del editor (ya no hay rutas /test-gift ni /reset por URL).
 // ============================================================
 
 import { TikTokLive } from "tiktok-live-api";
@@ -42,9 +45,10 @@ const firebaseConfig = {
 // ------------------------------------------------------------
 // 4) TUS CONTADORES PERSONALIZADOS
 // ------------------------------------------------------------
-// El nombre del regalo (giftName) debe coincidir EXACTO con el que
-// manda TikTok (revisa el log de Render al recibir uno real, por
-// si aparece distinto).
+// El "id" es el ID real de la caja de TEXTO creada en el editor
+// (la que usaste con 🔤 AGREGAR TEXTO). El nombre del regalo
+// (giftName) debe coincidir EXACTO con el que manda TikTok
+// (revisa el log de Render al recibir uno real, por si aparece distinto).
 const CONTADORES = {
   "Collar de Amistad": { id: "texto_1786492863677", cantidad: 0 },
   "Rosa":              { id: "texto_1786492875052", cantidad: 0 },
@@ -115,9 +119,9 @@ async function diagnosticoConexion() {
 }
 
 // ------------------------------------------------------------
-// Lógica central: qué hacer cuando llega un regalo (real o de prueba)
+// Lógica central: qué hacer cuando llega un regalo real
 // ------------------------------------------------------------
-function procesarRegalo(giftName, cantidadRecibida, uniqueId = "prueba") {
+function procesarRegalo(giftName, cantidadRecibida, uniqueId = "alguien") {
   console.log(`🎁 ${uniqueId} envió ${cantidadRecibida}x "${giftName}" (nombre exacto tal cual lo manda TikTok)`);
 
   const cfg = CONTADORES[giftName];
@@ -195,48 +199,6 @@ const PORT = process.env.PORT || 3000;
 
 server.get("/health", (req, res) => {
   res.status(200).send("Contador de regalos activo ✅");
-});
-
-// ------------------------------------------------------------
-// RUTAS DE PRUEBA Y RESETEO
-// ------------------------------------------------------------
-// Clave secreta para que nadie más pueda usar estas rutas si
-// llega a ver tu URL. Configúrala en Railway como variable de
-// entorno: ADMIN_KEY = lo-que-tú-quieras
-// Si no la configuras, usa "cambiame123" por defecto (cámbiala).
-const ADMIN_KEY = process.env.ADMIN_KEY || "cambiame123";
-
-// Prueba: simula que llegó un regalo, sin necesidad de mandarlo de verdad.
-// Uso: https://tu-servicio.up.railway.app/test-gift?clave=TU_CLAVE&nombre=Rosa&cantidad=1
-server.get("/test-gift", (req, res) => {
-  if (req.query.clave !== ADMIN_KEY) {
-    return res.status(403).send("❌ Clave incorrecta");
-  }
-  const nombre = req.query.nombre;
-  const cantidad = parseInt(req.query.cantidad, 10) || 1;
-  if (!nombre) {
-    return res.status(400).send("❌ Falta el parámetro 'nombre'. Ej: /test-gift?clave=...&nombre=Rosa&cantidad=1");
-  }
-  procesarRegalo(nombre, cantidad, "PRUEBA-MANUAL");
-  res.status(200).send(`✅ Simulado: ${cantidad}x "${nombre}". Revisa los logs y el overlay.`);
-});
-
-// Reset: pone todos los contadores en 0, tanto en memoria como en Firebase.
-// Uso: https://tu-servicio.up.railway.app/reset?clave=TU_CLAVE
-server.get("/reset", async (req, res) => {
-  if (req.query.clave !== ADMIN_KEY) {
-    return res.status(403).send("❌ Clave incorrecta");
-  }
-  for (const giftName in CONTADORES) {
-    CONTADORES[giftName].cantidad = 0;
-    await actualizarContador(CONTADORES[giftName].id, 0);
-  }
-  if (CONTADOR_TOTAL.activo) {
-    CONTADOR_TOTAL.cantidad = 0;
-    await actualizarContador(CONTADOR_TOTAL.id, 0);
-  }
-  console.log("🔄 Contadores reiniciados a 0 por petición manual.");
-  res.status(200).send("✅ Todos los contadores fueron reiniciados a 0.");
 });
 
 server.listen(PORT, () => {
