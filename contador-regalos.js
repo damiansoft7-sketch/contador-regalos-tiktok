@@ -94,7 +94,28 @@ async function restaurarContadores() {
   }
 }
 
+// ------------------------------------------------------------
+// DIAGNÓSTICO: prueba una petición HTTP normal (no WebSocket)
+// contra tik.tools para ver el status, los headers y el cuerpo
+// exactos de la respuesta. Esto nos dice si el 403 viene de un
+// firewall/WAF (headers tipo cloudflare) o de tik.tools mismo
+// (un mensaje de error en el cuerpo).
+// ------------------------------------------------------------
+async function diagnosticoConexion() {
+  try {
+    const url = `https://api.tik.tools/?uniqueId=${TIKTOK_USERNAME}&apiKey=${TIKTOOLS_API_KEY}`;
+    const res = await fetch(url);
+    console.log("🔎 DIAGNOSTICO status:", res.status);
+    console.log("🔎 DIAGNOSTICO headers:", JSON.stringify([...res.headers.entries()]));
+    const texto = await res.text();
+    console.log("🔎 DIAGNOSTICO body:", texto.slice(0, 500));
+  } catch (e) {
+    console.log("🔎 DIAGNOSTICO error:", e.message);
+  }
+}
+
 async function iniciar() {
+  await diagnosticoConexion();
   await restaurarContadores();
 
   if (!TIKTOOLS_API_KEY) {
@@ -144,6 +165,12 @@ async function iniciar() {
 
   client.connect();
 }
+
+// Evita que un error interno del socket de la librería tumbe todo
+// el proceso (y con él, el servidor Express de /health).
+process.on("uncaughtException", (err) => {
+  console.error("⚠️ Excepción no capturada:", err);
+});
 
 iniciar();
 
