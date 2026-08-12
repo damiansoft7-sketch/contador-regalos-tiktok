@@ -1,15 +1,15 @@
 // ============================================================
 // CONTADOR DE REGALOS DE TIKTOK LIVE -> FIREBASE (textoLive)
 // ============================================================
-// Este script se conecta a tu TikTok Live, escucha los regalos
-// que te envían y actualiza el número directamente en la misma
-// ruta de Firebase que ya usa tu overlay (textoLive/<id>).
+// Este script se conecta a tu TikTok Live (vía Tik.Tools) y
+// actualiza el número directamente en Firebase, en la misma ruta
+// que ya usa tu overlay (textoLive/<id>).
 //
 // No necesitas tocar index.html ni overlay.html: como overlay.html
 // ya escucha esa ruta con onValue(), el número cambia solo, en vivo.
 // ============================================================
 
-import { TikTokLiveConnection, WebcastEvent } from "tiktok-live-connector";
+import { TikTokLive } from "tiktok-live-api";
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, set, get } from "firebase/database";
 import express from "express";
@@ -20,7 +20,14 @@ import express from "express";
 const TIKTOK_USERNAME = "toyasao.ff";
 
 // ------------------------------------------------------------
-// 2) TU CONFIGURACIÓN DE FIREBASE (la misma de firebase.js)
+// 2) TU API KEY DE TIK.TOOLS (gratis, sacada en tik.tools)
+//    Se configura como variable de entorno en Render:
+//    Key: TIKTOOLS_API_KEY   Value: tu clave
+// ------------------------------------------------------------
+const TIKTOOLS_API_KEY = process.env.TIKTOOLS_API_KEY;
+
+// ------------------------------------------------------------
+// 3) TU CONFIGURACIÓN DE FIREBASE (la misma de firebase.js)
 // ------------------------------------------------------------
 const firebaseConfig = {
   apiKey: "AIzaSyDqdpAchewxlYmGrhFb5WyJKqbL5UP2XsA",
@@ -33,14 +40,11 @@ const firebaseConfig = {
 };
 
 // ------------------------------------------------------------
-// 3) TUS CONTADORES PERSONALIZADOS
+// 4) TUS CONTADORES PERSONALIZADOS
 // ------------------------------------------------------------
-// Cada entrada = un regalo que quieres contar y a qué caja de texto
-// (id de tu overlay) debe actualizar el número.
-//
 // El nombre del regalo (giftName) debe coincidir EXACTO con el que
-// manda TikTok (revisa el log de la consola / de Render al recibir
-// uno real, por si aparece distinto).
+// manda TikTok (revisa el log de Render al recibir uno real, por
+// si aparece distinto).
 const CONTADORES = {
   "Collar de Amistad": { id: "texto_1786492863677", cantidad: 0 },
   "Rosa":              { id: "texto_1786492875052", cantidad: 0 },
@@ -93,24 +97,27 @@ async function restaurarContadores() {
 async function iniciar() {
   await restaurarContadores();
 
-  // enableExtendedGiftInfo permite que data.giftDetails.giftName
-  // venga con el nombre real del regalo (ej. "Rosa", "Collar de Amistad").
-  // EULER_API_KEY se configura como variable de entorno en Render
-  // (no se pone directo en el código para no exponerla en GitHub).
-  const connection = new TikTokLiveConnection(TIKTOK_USERNAME, {
-    enableExtendedGiftInfo: true,
-    signApiKey: process.env.EULER_API_KEY
+  if (!TIKTOOLS_API_KEY) {
+    console.error("❌ Falta configurar la variable de entorno TIKTOOLS_API_KEY en Render.");
+    return;
+  }
+
+  const client = new TikTokLive(TIKTOK_USERNAME, { apiKey: TIKTOOLS_API_KEY });
+
+  client.on("connected", () => {
+    console.log(`✅ Conectado al live de @${TIKTOK_USERNAME}`);
   });
 
-  connection.on(WebcastEvent.GIFT, data => {
-    const giftType = data.giftDetails?.giftType ?? data.giftType;
-    const giftName = data.giftDetails?.giftName ?? data.giftName;
-    const uniqueId = data.user?.uniqueId ?? data.uniqueId ?? "alguien";
+  client.on("gift", data => {
+    const giftName = data.giftName;
+    const uniqueId = data.user?.uniqueId ?? "alguien";
+    const repeatEnd = data.repeatEnd;
+    const giftType = data.giftType;
 
     // TikTok reenvía el mismo regalo varias veces mientras el usuario
     // mantiene presionado el botón (combo). Solo contamos cuando el
     // combo termina, para no duplicar de más.
-    if (giftType === 1 && !data.repeatEnd) return;
+    if (giftType === 1 && repeatEnd === false) return;
 
     const cantidadRecibida = data.repeatCount || 1;
     console.log(`🎁 ${uniqueId} envió ${cantidadRecibida}x "${giftName}"`);
@@ -127,26 +134,15 @@ async function iniciar() {
     }
   });
 
-  connection.on(WebcastEvent.DISCONNECTED, () => {
-    console.log("⚠️ Desconectado del live. Reintentando en 15s...");
-    setTimeout(intentarConectar, 15000);
+  client.on("disconnected", () => {
+    console.log("⚠️ Desconectado del live. La librería reintentará sola.");
   });
 
-  // Reintenta la conexión indefinidamente (cada 15s) hasta que detecte
-  // que ya estás en vivo. Así no importa si el servicio arrancó antes
-  // de que empezaras a transmitir.
-  function intentarConectar() {
-    connection.connect()
-      .then(state => {
-        console.log(`✅ Conectado al live de @${TIKTOK_USERNAME} (roomId: ${state.roomId})`);
-      })
-      .catch(err => {
-        console.log(`❌ Aún no está en vivo @${TIKTOK_USERNAME}, reintentando en 15s... (${err.message})`);
-        setTimeout(intentarConectar, 15000);
-      });
-  }
+  client.on("error", err => {
+    console.log(`❌ Error de conexión: ${err.message || err}`);
+  });
 
-  intentarConectar();
+  client.connect();
 }
 
 iniciar();
