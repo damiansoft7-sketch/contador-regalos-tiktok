@@ -7,7 +7,7 @@
     "start": "node contador-regalos.js"
   },
   "dependencies": {
-    "tiktok-live-connector": "^1.4.0",
+    "tiktok-live-connector": "^2.4.3",
     "firebase": "^10.12.2",
     "express": "^4.19.2"
   }
