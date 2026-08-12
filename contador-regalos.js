@@ -99,14 +99,6 @@ async function iniciar() {
     enableExtendedGiftInfo: true
   });
 
-  connection.connect()
-    .then(state => {
-      console.log(`✅ Conectado al live de @${TIKTOK_USERNAME} (roomId: ${state.roomId})`);
-    })
-    .catch(err => {
-      console.error("❌ No se pudo conectar. ¿Estás en vivo ahora mismo?", err);
-    });
-
   connection.on(WebcastEvent.GIFT, data => {
     const giftType = data.giftDetails?.giftType ?? data.giftType;
     const giftName = data.giftDetails?.giftName ?? data.giftName;
@@ -133,9 +125,25 @@ async function iniciar() {
   });
 
   connection.on(WebcastEvent.DISCONNECTED, () => {
-    console.log("⚠️ Desconectado del live. Reintentando en 10s...");
-    setTimeout(() => connection.connect().catch(() => {}), 10000);
+    console.log("⚠️ Desconectado del live. Reintentando en 15s...");
+    setTimeout(intentarConectar, 15000);
   });
+
+  // Reintenta la conexión indefinidamente (cada 15s) hasta que detecte
+  // que ya estás en vivo. Así no importa si el servicio arrancó antes
+  // de que empezaras a transmitir.
+  function intentarConectar() {
+    connection.connect()
+      .then(state => {
+        console.log(`✅ Conectado al live de @${TIKTOK_USERNAME} (roomId: ${state.roomId})`);
+      })
+      .catch(err => {
+        console.log(`❌ Aún no está en vivo @${TIKTOK_USERNAME}, reintentando en 15s... (${err.message})`);
+        setTimeout(intentarConectar, 15000);
+      });
+  }
+
+  intentarConectar();
 }
 
 iniciar();
