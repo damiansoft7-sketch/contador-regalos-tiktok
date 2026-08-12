@@ -94,9 +94,12 @@ async function iniciar() {
   await restaurarContadores();
 
   // enableExtendedGiftInfo permite que data.giftDetails.giftName
-  // venga con el nombre real del regalo (ej. "Rosa", "Collar de Amistad")
+  // venga con el nombre real del regalo (ej. "Rosa", "Collar de Amistad").
+  // EULER_API_KEY se configura como variable de entorno en Render
+  // (no se pone directo en el código para no exponerla en GitHub).
   const connection = new TikTokLiveConnection(TIKTOK_USERNAME, {
-    enableExtendedGiftInfo: true
+    enableExtendedGiftInfo: true,
+    signApiKey: process.env.EULER_API_KEY
   });
 
   connection.on(WebcastEvent.GIFT, data => {
