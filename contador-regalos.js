@@ -48,8 +48,8 @@ const firebaseConfig = {
 // manda TikTok (revisa el log de la consola al recibir uno real,
 // por si aparece en otro idioma).
 const CONTADORES = {
-  "Collar de Amistad": { id: "texto_CAMBIAR_ID_COLLAR", cantidad: 0 },
-  "Rosa":              { id: "texto_CAMBIAR_ID_ROSA", cantidad: 0 },
+  "Collar de Amistad": { id: "texto_1786492863677", cantidad: 0 },
+  "Rosa":              { id: "texto_1786492875052", cantidad: 0 },
   // Si al probar ves en la consola que el nombre real es distinto
   // (ej. "Rose" o "Friendship Necklace"), cambia la clave aquí abajo
   // por el nombre exacto que te muestre el log.
